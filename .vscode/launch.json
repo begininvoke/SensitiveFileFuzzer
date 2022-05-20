@@ -11,7 +11,7 @@
             "program": "Main.go",
             "mode": "debug",
             "env": {},
-            "args": ["--url","https://fidibo.com/ " ,"--all"]
+            "args": ["--url","https://site.com/ " ,"--all"]
         } 
     ]
 }
