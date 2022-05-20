@@ -1,3 +1,9 @@
+[![Contributors][contributors-shield]][contributors-url]
+[![Forks][forks-shield]][forks-url]
+[![Stargazers][stars-shield]][stars-url]
+[![Issues][issues-shield]][issues-url]
+[![MIT License][license-shield]][license-url]
+[![LinkedIn][linkedin-shield]][linkedin-url]
 # Sensitive File Founder on WebSite
 
 A tool for fuzzing files on the website
@@ -31,7 +37,7 @@ Usage of ./SensitiveFile:
 ```
 ## config
 To avoid mistakes you can enter custom settings for each route
-Sample config :
+Sample config :--cached
 ```json
 {
   "path" : "/test.txt",
@@ -44,7 +50,7 @@ Sample config :
 
 Content-Type:
 
-content : "*" allow all responsgie and any header sets
+content : "*" allow all responsegit and any header sets
 
 content : "#application/json#text/html"  all headers except (text/html , application/json) which are separated by #
 
