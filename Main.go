@@ -22,6 +22,7 @@ func main() {
 	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 
 	address := flag.String("url", "", "url address https://google.com")
+	configfile := flag.String("config", "", "config json file path ")
 	gitfile := flag.Bool("git", false, "try git lists")
 	Sensfile := flag.Bool("sens", false, "try sens lists")
 	Envfile := flag.Bool("env", false, "try env lists")
@@ -44,14 +45,18 @@ func main() {
 	}
 	if *address == "" {
 		println("please set url with --url or -h for help")
+		return
 	}
 	path, err := os.Getwd()
 	if err != nil {
 		println(err.Error())
 		return
 	}
-
-	jsonFile, err := os.Open(path + "/SensitiveList.json")
+	configfilepath := path + "/SensitiveList.json"
+	if *configfile != "" {
+		configfilepath = *configfile
+	}
+	jsonFile, err := os.Open(configfilepath)
 	if err != nil {
 		fmt.Printf("%s", "Can not read json file")
 	}
