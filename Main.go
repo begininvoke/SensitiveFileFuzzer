@@ -113,7 +113,11 @@ func checkurl(url string, content string, len string) {
 	resp, err := httpcc.Head(url)
 
 	if err != nil {
+		if strings.Contains(err.Error(), "http: server gave HTTP response to HTTPS clien") {
+			os.Exit(3)
+		}
 		println(err.Error())
+
 		resp, err = httpcc.Get(url)
 
 	}
