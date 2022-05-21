@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -47,12 +48,13 @@ func main() {
 		println("please set url with --url or -h for help")
 		return
 	}
-	path, err := os.Getwd()
+	ex, err := os.Executable()
 	if err != nil {
-		println(err.Error())
-		return
+		panic(err)
 	}
-	configfilepath := path + "/SensitiveList.json"
+	exPath := filepath.Dir(ex)
+
+	configfilepath := exPath + "/SensitiveList.json"
 	if *configfile != "" {
 		configfilepath = *configfile
 	}
