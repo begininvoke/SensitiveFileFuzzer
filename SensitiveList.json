@@ -32,7 +32,7 @@
   ,
     {
       "path" : "/database.log",
-      "content" : "#text/html#image",
+      "content" : "#application/json#text/html#image",
       "lentgh" : "*"
     }
   ,
@@ -184,7 +184,7 @@
     },
     {
       "path" : "/.DS_Store",
-      "content" : "#text/html#image",
+      "content" : "#application/json#text/html#image",
       "lentgh" : "*"
     },
     {

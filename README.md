@@ -1,63 +1,134 @@
+# Sensitive File Finder for Websites
 
-# Sensitive File Founder on WebSite
+A security tool for discovering sensitive files on websites. Scans for multiple categories of sensitive files with customizable output formats.
 
-A tool for fuzzing files on the website
-Included shell[[webbackdor]] file name list {--shell}, .env file list {--env}, git file list{--git} and sensitive file list {--sens}
+## Features
 
-## Usage
+- 🔍 Multiple scan categories:
+  - Shell/backdoor files
+  - Environment files
+  - Git repository files
+  - Other sensitive files
+- 📊 Flexible output formats (JSON, CSV)
+- 📁 Output file support
+- 🎯 Category-based result tracking
+
+## Installation
 
 ```bash
 git clone https://github.com/begininvoke/SensitiveFileFuzzer.git
 cd SensitiveFileFuzzer
 go build
-./SensitiveFileFuzzer -url https://site.com --shell
 ```
-## Help
+
+## Usage
+
+Basic scan:
 ```bash
-./SensitiveFileFuzzer -h
-Usage of ./SensitiveFile:
-  -all
-        try all lists
-  -env
-        try env lists
-  -git
-        try git lists
-  -sens
-        try sens lists
-  -shell
-        try shellfile lists
-  -url string
-        url address https://google.com
-  -v    show success result  only
+./SensitiveFileFuzzer -url https://example.com --shell
 ```
-## config
-To avoid mistakes you can enter custom settings for each route
-Sample config :--cached
+
+Comprehensive scan with JSON output:
+```bash
+./SensitiveFileFuzzer -url https://example.com --all -f json -o ./results
+```
+
+## Options
+
+```bash
+Usage of ./SensitiveFileFuzzer:
+  -url string
+        Target URL (e.g., https://example.com)
+  -all
+        Try all file lists
+  -env
+        Try environment file lists
+  -git
+        Try git-related file lists
+  -sens
+        Try sensitive file lists
+  -shell
+        Try shell/backdoor file lists
+  -f string
+        Output format: json or csv
+  -o string
+        Output directory path
+  -v    
+        Show only successful results
+  -config string
+        Custom config JSON file path
+```
+
+## Output Formats
+
+### JSON Output
 ```json
 {
-  "path" : "/test.txt",
-  "content" : "#application/json#text/html",
-  "lentgh" : "*"
-
+  "total_count": 4,
+  "categories": {
+    "Git": [
+      "https://example.com/.git/config",
+      "https://example.com/.gitignore"
+    ],
+    "Environment": [
+      "https://example.com/.env",
+      "https://example.com/.env.local"
+    ]
+  },
+  "summary": {
+    "Git": 2,
+    "Environment": 2
+  }
 }
 ```
 
+### CSV Output
+```csv
+Category,URL
+Git,https://example.com/.git/config
+Git,https://example.com/.gitignore
+Environment,https://example.com/.env
+Environment,https://example.com/.env.local
+```
 
-Content-Type:
+### Console Output
+```
+🎯 Found 4 sensitive files:
 
-content : "*" allow all responsegit and any header sets
+📁 Git (2 files):
+  └─ https://example.com/.git/config
+  └─ https://example.com/.gitignore
 
-content : "#application/json#text/html"  all headers except (text/html , application/json) which are separated by #
+📁 Environment (2 files):
+  └─ https://example.com/.env
+  └─ https://example.com/.env.local
+```
 
-content : "application/json"  allow just application/json in response header
+## Configuration
 
-Content-Length:
-lentgh : 10  allow response header Content-Length >= 10 
+Customize detection rules using a JSON configuration file:
+
+```json
+{
+  "path": "/test.txt",
+  "content": "#application/json#text/html",
+  "length": "*"
+}
+```
+
+### Content-Type Rules
+- `"*"`: Accept any Content-Type
+- `"#application/json#text/html"`: Exclude specific Content-Types
+- `"application/json"`: Match exact Content-Type
+
+### Content-Length Rules
+- `"length": "10"`: Match responses with Content-Length >= 10
+- `"length": "*"`: Accept any Content-Length
 
 ## Contributing
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
 
-Please make sure to update tests as appropriate.
+Pull requests are welcome. For major changes, please open an issue first.
 
 ## License
+
 [MIT](https://choosealicense.com/licenses/mit/)
