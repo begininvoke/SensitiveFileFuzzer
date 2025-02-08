@@ -186,7 +186,7 @@ func checkurl(url string, content string, len string, category string) {
 				}
 			}
 		} else {
-			//fmt.Printf("'%s', '%s',\n", url, resp.Status)
+
 		}
 	}
 }
