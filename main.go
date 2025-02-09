@@ -64,11 +64,24 @@ func main() {
 	//	panic(err)
 	//}
 	//exPath := filepath.Dir(ex)
-
-	configfilepath := "./SensitiveList.json"
-	if *configfile != "" {
-		configfilepath = *configfile
+	appPath, err := os.Executable()
+	if err != nil {
+		fmt.Printf("Failed to get application path: %v\n", err)
+		return
 	}
+	appDir := filepath.Dir(appPath) // Directory where the application is running
+
+	// Default paths
+	defaultLocalPath := filepath.Join(appDir, "SensitiveList.json") // ./SensitiveList.json
+	defaultGlobalPath := "/usr/local/bin/SensitiveList.json"        // /usr/local/bin/SensitiveList.json
+
+	// Check if the file exists in the application's directory
+	configfilepath := defaultLocalPath
+	if _, err := os.Stat(configfilepath); os.IsNotExist(err) {
+		// If not found in the app directory, fall back to /usr/local/bin
+		configfilepath = defaultGlobalPath
+	}
+
 	jsonFile, err := os.Open(configfilepath)
 	if err != nil {
 		fmt.Printf("%s", "Can not read json file")
