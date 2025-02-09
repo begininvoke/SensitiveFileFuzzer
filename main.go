@@ -30,7 +30,6 @@ func main() {
 	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 
 	address := flag.String("url", "", "URL to scan (e.g., https://example.com)")
-	configfile := flag.String("config", "", "custom config JSON file path")
 	format := flag.String("f", "", "output format: json or csv")
 	outDir := flag.String("o", "", "output directory path")
 	gitfile := flag.Bool("git", false, "scan git-related files")
