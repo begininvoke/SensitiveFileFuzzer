@@ -249,12 +249,19 @@ func writeJSONOutput(results map[string][]string, outputDir string) {
 	}
 
 	if outputDir != "" {
-		filename := filepath.Join(outputDir, "scan_results.json")
-		if err := os.WriteFile(filename, jsonData, 0644); err != nil {
+		// Create directory if it doesn't exist
+		dir := filepath.Dir(outputDir)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			fmt.Printf("Error creating directory: %v\n", err)
+			return
+		}
+
+		// Use outputDir directly as it contains the filename
+		if err := os.WriteFile(outputDir, jsonData, 0644); err != nil {
 			fmt.Printf("Error writing JSON file: %v\n", err)
 			return
 		}
-		fmt.Printf("📝 Results saved to: %s\n", filename)
+		fmt.Printf("📝 Results saved to: %s\n", outputDir)
 	} else {
 		fmt.Println(string(jsonData))
 	}
@@ -271,12 +278,19 @@ func writeCSVOutput(results map[string][]string, outputDir string) {
 	}
 
 	if outputDir != "" {
-		filename := filepath.Join(outputDir, "scan_results.csv")
-		if err := os.WriteFile(filename, []byte(output.String()), 0644); err != nil {
+		// Create directory if it doesn't exist
+		dir := filepath.Dir(outputDir)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			fmt.Printf("Error creating directory: %v\n", err)
+			return
+		}
+
+		// Use outputDir directly as it contains the filename
+		if err := os.WriteFile(outputDir, []byte(output.String()), 0644); err != nil {
 			fmt.Printf("Error writing CSV file: %v\n", err)
 			return
 		}
-		fmt.Printf("📝 Results saved to: %s\n", filename)
+		fmt.Printf("📝 Results saved to: %s\n", outputDir)
 	} else {
 		fmt.Print(output.String())
 	}
