@@ -58,8 +58,15 @@ func main() {
 		println("please set url with --url or -h for help")
 		return
 	}
+
+	// Add site availability check
+	if !checkSiteIsUp(*address) {
+		fmt.Printf("🚨 Host %s is unreachable, aborting scan\n", *address)
+		return
+	}
+
 	//ex, err := os.Executable()
-	//if err != nil {
+	//if err != nil {go
 	//	panic(err)
 	//}
 	//exPath := filepath.Dir(ex)
@@ -119,11 +126,6 @@ func main() {
 		for i := 0; i < len(paths.Shell); i++ {
 			checkurl(*address+paths.Shell[i].Path, paths.Shell[i].Content, paths.Shell[i].Lentgh, "Shell")
 		}
-	}
-
-	totalFiles := 0
-	for _, files := range successlist {
-		totalFiles += len(files)
 	}
 
 	switch formatType {
@@ -307,4 +309,27 @@ func printResults(results map[string][]string) {
 		}
 		fmt.Println()
 	}
+}
+
+// Add new function for site availability check
+func checkSiteIsUp(url string) bool {
+	client := &http.Client{
+		Timeout: 20 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+
+	resp, err := client.Head(url)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+
+	// Consider any 2xx/3xx status as "up"
+	if resp.StatusCode >= 200 && resp.StatusCode < 400 {
+		fmt.Printf("✅ Host is reachable (%s)\n", resp.Status)
+		return true
+	}
+	return false
 }
