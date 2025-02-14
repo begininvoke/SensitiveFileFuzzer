@@ -73,7 +73,6 @@ func main() {
 	// Default paths
 	defaultLocalPath := filepath.Join(appDir, "SensitiveList.json") // ./SensitiveList.json
 	defaultGlobalPath := "/usr/local/bin/SensitiveList.json"        // /usr/local/bin/SensitiveList.json
-	fmt.Printf("Checking for SensitiveList.json in %s\n and %s\n", appDir, defaultGlobalPath)
 	// Check if the file exists in the application's directory
 	configfilepath := defaultLocalPath
 	if _, err := os.Stat(configfilepath); os.IsNotExist(err) {
