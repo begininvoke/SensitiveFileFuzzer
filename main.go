@@ -126,18 +126,15 @@ func main() {
 		totalFiles += len(files)
 	}
 
-	if totalFiles > 0 {
-		switch formatType {
-		case "json":
-			writeJSONOutput(successlist, outputDir)
-		case "csv":
-			writeCSVOutput(successlist, outputDir)
-		default:
-			printResults(successlist)
-		}
-	} else {
-		fmt.Println("\n🔍 No sensitive files found.")
+	switch formatType {
+	case "json":
+		writeJSONOutput(successlist, outputDir)
+	case "csv":
+		writeCSVOutput(successlist, outputDir)
+	default:
+		printResults(successlist)
 	}
+
 }
 
 func checkurl(url string, content string, len string, category string) {
