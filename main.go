@@ -327,7 +327,7 @@ func checkSiteIsUp(url string) bool {
 	defer resp.Body.Close()
 
 	// Consider any 2xx/3xx status as "up"
-	if resp.StatusCode >= 200 && resp.StatusCode < 400 {
+	if resp.StatusCode >= 200 && resp.StatusCode < 501 {
 		fmt.Printf("✅ Host is reachable (%s)\n", resp.Status)
 		return true
 	}
