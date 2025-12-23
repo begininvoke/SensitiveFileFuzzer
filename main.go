@@ -20,9 +20,32 @@ var successlist map[string][]string
 var httpcc http.Client
 var formatType string
 var outputDir string
+var rateLimiter chan struct{}
 
 func init() {
 	successlist = make(map[string][]string)
+}
+
+func initRateLimiter(requestsPerSecond int) {
+	rateLimiter = make(chan struct{}, requestsPerSecond)
+
+	// Fill the channel initially
+	for i := 0; i < requestsPerSecond; i++ {
+		rateLimiter <- struct{}{}
+	}
+
+	// Start a goroutine to refill tokens at the specified rate
+	go func() {
+		ticker := time.NewTicker(time.Second / time.Duration(requestsPerSecond))
+		defer ticker.Stop()
+		for range ticker.C {
+			select {
+			case rateLimiter <- struct{}{}:
+			default:
+				// Channel is full, skip
+			}
+		}
+	}()
 }
 
 func main() {
@@ -38,6 +61,7 @@ func main() {
 	Shellfile := flag.Bool("shell", false, "try shellfile lists")
 	Allfile := flag.Bool("all", false, "try all lists")
 	success := flag.Bool("v", false, "show success result  only")
+	rateLimit := flag.Int("rate", 0, "rate limit: requests per second (0 = no limit)")
 	flag.Parse()
 	formatType = *format
 	outputDir = *outDir
@@ -107,6 +131,13 @@ func main() {
 	}
 
 	httpcc = http.Client{Jar: jar}
+
+	// Initialize rate limiter if specified
+	if *rateLimit > 0 {
+		initRateLimiter(*rateLimit)
+		fmt.Printf("⚡ Rate limit set to %d requests/second\n", *rateLimit)
+	}
+
 	if *gitfile {
 		for i := 0; i < len(paths.Git); i++ {
 			checkurl(*address+paths.Git[i].Path, paths.Git[i].Content, paths.Git[i].Lentgh, "Git")
@@ -140,6 +171,11 @@ func main() {
 }
 
 func checkurl(url string, content string, len string, category string) {
+	// Apply rate limiting if enabled
+	if rateLimiter != nil {
+		<-rateLimiter // Wait for a token
+	}
+
 	// Set timeout of 20 seconds
 	httpcc.Timeout = 20 * time.Second
 
