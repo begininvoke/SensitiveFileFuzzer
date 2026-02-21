@@ -50,8 +50,6 @@ func initRateLimiter(requestsPerSecond int) {
 
 func main() {
 
-	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-
 	address := flag.String("url", "", "URL to scan (e.g., https://example.com)")
 	format := flag.String("f", "", "output format: json or csv")
 	outDir := flag.String("o", "", "output directory path")
@@ -130,7 +128,13 @@ func main() {
 		println(err.Error())
 	}
 
-	httpcc = http.Client{Jar: jar}
+	httpcc = http.Client{
+		Jar: jar,
+		Transport: &http.Transport{
+			TLSClientConfig:   &tls.Config{InsecureSkipVerify: true},
+			DisableKeepAlives: true,
+		},
+	}
 
 	// Initialize rate limiter if specified
 	if *rateLimit > 0 {
@@ -182,7 +186,7 @@ func checkurl(url string, content string, len string, category string) {
 	resp, err := httpcc.Head(url)
 
 	if err != nil {
-		println(err.Error())
+		//println(err.Error())
 		if strings.Contains(err.Error(), "http: server gave HTTP response to HTTPS clien") {
 			os.Exit(3)
 		}
