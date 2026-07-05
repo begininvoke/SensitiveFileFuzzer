@@ -1,7 +1,9 @@
 package main
 
 import (
+	"crypto/rand"
 	"crypto/tls"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -21,6 +23,17 @@ var httpcc http.Client
 var formatType string
 var outputDir string
 var rateLimiter chan struct{}
+
+// baselineSignature describes the 200-response a site returns for a path that
+// should NOT exist (soft-404 / SPA catch-all / wildcard routing).
+type baselineSignature struct {
+	BodySize    int64
+	ContentType string
+}
+
+// baselines holds the fingerprints of "false" paths probed before scanning.
+// A real hit that matches any of these is treated as a false positive.
+var baselines []baselineSignature
 
 func init() {
 	successlist = make(map[string][]string)
@@ -142,6 +155,11 @@ func main() {
 		fmt.Printf("⚡ Rate limit set to %d requests/second\n", *rateLimit)
 	}
 
+	// Establish a false-positive baseline: probe paths that should never exist.
+	// If the site answers 200 for them, record the signature so real hits that
+	// look identical can be discarded as false positives.
+	establishBaseline(*address)
+
 	if *gitfile {
 		for i := 0; i < len(paths.Git); i++ {
 			checkurl(*address+paths.Git[i].Path, paths.Git[i].Content, paths.Git[i].Lentgh, "Git")
@@ -216,6 +234,22 @@ func checkurl(url string, content string, len string, category string) {
 				}
 
 				if respcontetnt == content || content == "*" || checkifinarry(ignore, respcontetnt) {
+					// Fetch the real body so we can measure its size accurately
+					// (HEAD often omits Content-Length) and compare it against the
+					// false-positive baseline.
+					bodySize, bodyContentType := fetchBody(url)
+					if bodyContentType == "" {
+						bodyContentType = respcontetnt
+					}
+
+					// Discard hits that look identical to a known-false path.
+					if isFalsePositive(bodySize, bodyContentType) {
+						if !justsuccess {
+							fmt.Printf("False positive (matches baseline) '%s', size=%d, '%s'\n", url, bodySize, bodyContentType)
+						}
+						return
+					}
+
 					if len == "*" {
 						fmt.Printf("Success '%s', '%s', '%s',\n", url, resp.Status, resp.Header.Get("Content-Type"))
 						if _, exists := successlist[category]; !exists {
@@ -225,7 +259,7 @@ func checkurl(url string, content string, len string, category string) {
 					} else {
 						lennumber, err := strconv.ParseInt(len, 0, 64)
 						if err == nil {
-							if lennumber >= resp.ContentLength {
+							if lennumber >= bodySize {
 								fmt.Printf("Success '%s', '%s', '%s',\n", url, resp.Status, resp.Header.Get("Content-Type"))
 								if _, exists := successlist[category]; !exists {
 									successlist[category] = []string{}
@@ -240,6 +274,124 @@ func checkurl(url string, content string, len string, category string) {
 
 		}
 	}
+}
+
+// fetchBody performs a GET and returns the actual body size (in bytes) and the
+// Content-Type header. Returns (-1, "") if the request fails.
+func fetchBody(url string) (int64, string) {
+	if rateLimiter != nil {
+		<-rateLimiter
+	}
+	resp, err := httpcc.Get(url)
+	if err != nil {
+		return -1, ""
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return -1, resp.Header.Get("Content-Type")
+	}
+	return int64(len(body)), resp.Header.Get("Content-Type")
+}
+
+// randomString returns a random hex string of the given byte length.
+func randomString(n int) string {
+	b := make([]byte, n)
+	if _, err := rand.Read(b); err != nil {
+		// Fall back to a fixed token; still very unlikely to exist as a path.
+		return "znonexistentznonexistentz"
+	}
+	return hex.EncodeToString(b)
+}
+
+// establishBaseline probes several paths that should never exist. Any that
+// answer 200 are fingerprinted (body size + content-type) so that real hits
+// which look identical can be flagged as false positives.
+func establishBaseline(address string) {
+	base := strings.TrimRight(address, "/")
+	token := randomString(16)
+	probes := []string{
+		base + "/" + token + ".html",
+		base + "/" + token,
+		base + "/js/" + token + ".env",
+		base + "/" + token + "/" + token + ".php",
+	}
+
+	for _, p := range probes {
+		if rateLimiter != nil {
+			<-rateLimiter
+		}
+		resp, err := httpcc.Get(p)
+		if err != nil {
+			continue
+		}
+		body, _ := ioutil.ReadAll(resp.Body)
+		ct := resp.Header.Get("Content-Type")
+		sc := resp.StatusCode
+		resp.Body.Close()
+
+		if sc == 200 {
+			sig := baselineSignature{BodySize: int64(len(body)), ContentType: ct}
+			if !hasBaseline(sig) {
+				baselines = append(baselines, sig)
+			}
+		}
+	}
+
+	if len(baselines) > 0 {
+		fmt.Printf("⚠️  Site returns 200 for non-existent paths (soft-404). Recorded %d baseline signature(s) for false-positive filtering:\n", len(baselines))
+		for _, b := range baselines {
+			fmt.Printf("   └─ size=%d bytes, content-type=%s\n", b.BodySize, b.ContentType)
+		}
+	}
+}
+
+// hasBaseline reports whether an equivalent signature is already recorded.
+func hasBaseline(sig baselineSignature) bool {
+	for _, b := range baselines {
+		if b.ContentType == sig.ContentType && b.BodySize == sig.BodySize {
+			return true
+		}
+	}
+	return false
+}
+
+// isFalsePositive reports whether a hit's body size and content-type match any
+// recorded baseline signature closely enough to be considered a false positive.
+// Bodies match when the content-type is identical and the size is within ~2%
+// (or 16 bytes) of the baseline, tolerating tiny dynamic differences.
+func isFalsePositive(bodySize int64, contentType string) bool {
+	if len(baselines) == 0 || bodySize < 0 {
+		return false
+	}
+	for _, b := range baselines {
+		if !sameContentType(b.ContentType, contentType) {
+			continue
+		}
+		diff := bodySize - b.BodySize
+		if diff < 0 {
+			diff = -diff
+		}
+		tolerance := b.BodySize / 50 // 2%
+		if tolerance < 16 {
+			tolerance = 16
+		}
+		if diff <= tolerance {
+			return true
+		}
+	}
+	return false
+}
+
+// sameContentType compares content-type headers ignoring charset/parameters.
+func sameContentType(a, b string) bool {
+	norm := func(s string) string {
+		if i := strings.Index(s, ";"); i >= 0 {
+			s = s[:i]
+		}
+		return strings.TrimSpace(strings.ToLower(s))
+	}
+	return norm(a) == norm(b)
 }
 func checkifinarry(array []string, check string) bool {
 	if len(array) == 0 {
@@ -261,8 +413,8 @@ type Sensitive struct {
 type SensitiveList struct {
 	Sensitive []Sensitive `json:"Sensitive"`
 	Git       []Sensitive `json:"Gitfile"`
-	Env       []Sensitive `json:Env`
-	Shell     []Sensitive `json:shell`
+	Env       []Sensitive `json:"Env"`
+	Shell     []Sensitive `json:"Shell"`
 }
 
 func writeJSONOutput(results map[string][]string, outputDir string) {

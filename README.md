@@ -12,6 +12,23 @@ A security tool for discovering sensitive files on websites. Scans for multiple 
 - 📊 Flexible output formats (JSON, CSV)
 - 📁 Output file support
 - 🎯 Category-based result tracking
+- 🛡️ Soft-404 / false-positive filtering
+
+## False-Positive Filtering
+
+Many sites (SPAs, catch-all routers, custom error pages) return `200 OK` for
+**any** path, including files that don't exist — e.g. `https://site/js/.env`
+returns the SPA index page with status `200`. Without protection every probed
+path looks like a "hit".
+
+Before scanning, the tool probes several paths that should never exist and
+records the signature (body size + `Content-Type`) of any `200` response. When
+a real target file is found, its body is fetched and compared to those
+baselines. If it matches (same content-type and body size within ~2%), it is
+discarded as a false positive instead of being reported.
+
+Baseline signatures are printed at the start of a scan when a soft-404 site is
+detected.
 
 ## Installation
 

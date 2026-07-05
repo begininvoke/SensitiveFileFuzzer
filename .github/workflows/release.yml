@@ -1,0 +1,54 @@
+name: Build and Update Release v1
+
+on:
+  push:
+    branches:
+      - master
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.3'
+
+      - name: Build binaries for all platforms
+        run: |
+          archs=(amd64 arm64)
+          oses=(linux windows darwin)
+          for o in "${oses[@]}"; do
+            for arch in "${archs[@]}"; do
+              out="SensitiveFileFuzzer_${o}_${arch}"
+              echo "Building ${out}"
+              env GOOS="${o}" GOARCH="${arch}" go build -o "${out}" .
+            done
+          done
+
+      - name: Update release v1
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "1"
+          name: "v1"
+          body: |
+            Rolling release built from the latest push to the default branch.
+            Commit: ${{ github.sha }}
+          files: |
+            SensitiveFileFuzzer_linux_amd64
+            SensitiveFileFuzzer_linux_arm64
+            SensitiveFileFuzzer_darwin_amd64
+            SensitiveFileFuzzer_darwin_arm64
+            SensitiveFileFuzzer_windows_amd64
+            SensitiveFileFuzzer_windows_arm64
+            SensitiveList.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
