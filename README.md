@@ -72,8 +72,26 @@ Usage of ./SensitiveFileFuzzer:
         Output directory path
   -v    
         Show only successful results
+  -rate int
+        Rate limit: requests per second (0 = no limit)
+  -timeout int
+        Per-request timeout in seconds (default 20)
+  -maxtimeouts int
+        Abort the scan after this many consecutive timeouts (default 3)
   -config string
         Custom config JSON file path
+```
+
+## Timeout Handling
+
+Each request is bounded by `-timeout` seconds (default `20`). Consecutive
+timeouts are counted: after `-maxtimeouts` in a row (default `3`) the scan is
+aborted, since the host has likely gone down or started dropping requests. Any
+successful response resets the counter to `0`, so isolated slow requests don't
+stop a healthy scan.
+
+```bash
+./SensitiveFileFuzzer -url https://example.com --all -timeout 5 -maxtimeouts 3
 ```
 
 ## Output Formats
