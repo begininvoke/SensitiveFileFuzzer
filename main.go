@@ -5,9 +5,11 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/http/cookiejar"
 	"os"
@@ -23,6 +25,13 @@ var httpcc http.Client
 var formatType string
 var outputDir string
 var rateLimiter chan struct{}
+
+// Timeout handling: abort the whole scan after too many consecutive timeouts
+// (host likely went down), resetting the counter whenever a request succeeds.
+var scanTimeout time.Duration = 20 * time.Second
+var maxConsecutiveTimeouts int = 3
+var consecutiveTimeouts int = 0
+var scanAborted bool = false
 
 // baselineSignature describes the 200-response a site returns for a path that
 // should NOT exist (soft-404 / SPA catch-all / wildcard routing).
@@ -73,9 +82,17 @@ func main() {
 	Allfile := flag.Bool("all", false, "try all lists")
 	success := flag.Bool("v", false, "show success result  only")
 	rateLimit := flag.Int("rate", 0, "rate limit: requests per second (0 = no limit)")
+	timeoutSec := flag.Int("timeout", 20, "per-request timeout in seconds")
+	maxTimeouts := flag.Int("maxtimeouts", 3, "abort scan after this many consecutive timeouts")
 	flag.Parse()
 	formatType = *format
 	outputDir = *outDir
+	if *timeoutSec > 0 {
+		scanTimeout = time.Duration(*timeoutSec) * time.Second
+	}
+	if *maxTimeouts > 0 {
+		maxConsecutiveTimeouts = *maxTimeouts
+	}
 	if !*gitfile && !*Sensfile && !*Envfile && !*Shellfile {
 
 		*Allfile = true
@@ -162,21 +179,33 @@ func main() {
 
 	if *gitfile {
 		for i := 0; i < len(paths.Git); i++ {
+			if scanAborted {
+				break
+			}
 			checkurl(*address+paths.Git[i].Path, paths.Git[i].Content, paths.Git[i].Lentgh, "Git")
 		}
 	}
 	if *Sensfile {
 		for i := 0; i < len(paths.Sensitive); i++ {
+			if scanAborted {
+				break
+			}
 			checkurl(*address+paths.Sensitive[i].Path, paths.Sensitive[i].Content, paths.Sensitive[i].Lentgh, "Sensitive")
 		}
 	}
 	if *Envfile {
 		for i := 0; i < len(paths.Env); i++ {
+			if scanAborted {
+				break
+			}
 			checkurl(*address+paths.Env[i].Path, paths.Env[i].Content, paths.Env[i].Lentgh, "Env")
 		}
 	}
 	if *Shellfile {
 		for i := 0; i < len(paths.Shell); i++ {
+			if scanAborted {
+				break
+			}
 			checkurl(*address+paths.Shell[i].Path, paths.Shell[i].Content, paths.Shell[i].Lentgh, "Shell")
 		}
 	}
@@ -193,13 +222,16 @@ func main() {
 }
 
 func checkurl(url string, content string, len string, category string) {
+	if scanAborted {
+		return
+	}
 	// Apply rate limiting if enabled
 	if rateLimiter != nil {
 		<-rateLimiter // Wait for a token
 	}
 
-	// Set timeout of 20 seconds
-	httpcc.Timeout = 20 * time.Second
+	// Set the per-request timeout
+	httpcc.Timeout = scanTimeout
 
 	resp, err := httpcc.Head(url)
 
@@ -208,15 +240,22 @@ func checkurl(url string, content string, len string, category string) {
 		if strings.Contains(err.Error(), "http: server gave HTTP response to HTTPS clien") {
 			os.Exit(3)
 		}
-		if strings.Contains(err.Error(), "timeout") {
-			fmt.Printf("Timeout occurred while checking '%s'\n", url)
+		if isTimeout(err) {
+			registerTimeout(url)
 			return
 		}
 
 		resp, err = httpcc.Get(url)
-
+		if err != nil {
+			if isTimeout(err) {
+				registerTimeout(url)
+			}
+			return
+		}
 	}
 	if err == nil {
+		// A response came back: the host is alive, so reset the timeout counter.
+		consecutiveTimeouts = 0
 		if !justsuccess {
 			fmt.Printf("Checking '%s', '%s',\n", url, resp.Status)
 		}
@@ -273,6 +312,32 @@ func checkurl(url string, content string, len string, category string) {
 		} else {
 
 		}
+	}
+}
+
+// isTimeout reports whether an error is a request timeout. It handles both the
+// typed net.Error case and the client-timeout ("context deadline exceeded")
+// message string, which the plain lowercase "timeout" check used to miss.
+func isTimeout(err error) bool {
+	if err == nil {
+		return false
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "timeout") || strings.Contains(msg, "deadline exceeded")
+}
+
+// registerTimeout records a timeout and aborts the scan once too many happen
+// consecutively (the counter is reset elsewhere whenever a request succeeds).
+func registerTimeout(url string) {
+	consecutiveTimeouts++
+	fmt.Printf("⏱️  Timeout while checking '%s' (%d/%d consecutive)\n", url, consecutiveTimeouts, maxConsecutiveTimeouts)
+	if consecutiveTimeouts >= maxConsecutiveTimeouts {
+		scanAborted = true
+		fmt.Printf("🚨 %d consecutive timeouts reached — aborting scan\n", maxConsecutiveTimeouts)
 	}
 }
 
@@ -506,7 +571,7 @@ func printResults(results map[string][]string) {
 // Add new function for site availability check
 func checkSiteIsUp(url string) bool {
 	client := &http.Client{
-		Timeout: 20 * time.Second,
+		Timeout: scanTimeout,
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		},
